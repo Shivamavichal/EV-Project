@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Smart EV Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <span class="logo">⚡ AI Smart EV</span>
+      <div class="header-right">
+        <span class="user-chip">👤 {{ username }}</span>
+        <span id="vehicle-badge" class="badge badge-locked">🔒 LOCKED</span>
+        <button class="btn-logout" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- Camera Feed -->
+    <section class="card card-camera">
+      <h2>Live Camera Feed</h2>
+      <div class="camera-wrap">
+        <img id="camera-feed" src="/video_feed" alt="Camera Feed"/>
+      </div>
+    </section>
+
+    <!-- Status Panel -->
+    <section class="card card-status">
+      <h2>System Status</h2>
+      <div class="status-row"><span class="label">Vehicle</span>
+        <span id="st-vehicle" class="value badge badge-locked">LOCKED</span></div>
+      <div class="status-row"><span class="label">Face Detected</span>
+        <span id="st-face-detected" class="value">—</span></div>
+      <div class="status-row"><span class="label">Face Auth</span>
+        <span id="st-face-auth" class="value">—</span></div>
+      <div class="status-row"><span class="label">Matched User</span>
+        <span id="st-matched-user" class="value">—</span></div>
+      <div class="status-row"><span class="label">Gesture</span>
+        <span id="st-gesture" class="value">—</span></div>
+      <div class="status-row"><span class="label">Command</span>
+        <span id="st-command" class="value cmd-badge">S</span></div>
+      <div class="status-row"><span class="label">Movement</span>
+        <span id="st-movement" class="value">STOPPED</span></div>
+      <hr/>
+      <div class="status-row"><span class="label">ESP32 Port</span>
+        <span id="st-port" class="value">—</span></div>
+      <div class="status-row"><span class="label">ESP32 Status</span>
+        <span id="st-serial" class="value">—</span></div>
+      <div class="status-row"><span class="label">Distance</span>
+        <span id="st-distance" class="value">— cm</span></div>
+      <div class="status-row"><span class="label">Obstacle</span>
+        <span id="st-obstacle" class="value">—</span></div>
+    </section>
+
+    <!-- Manual Controls -->
+    <section class="card card-controls">
+      <h2>Manual Control</h2>
+      <p class="hint">Hold buttons to move. Release to stop.</p>
+      <div class="dpad">
+        <div class="dpad-row">
+          <button class="btn-ctrl" onmousedown="sendCmd('F')" onmouseup="sendCmd('S')"
+            ontouchstart="sendCmd('F')" ontouchend="sendCmd('S')">▲<br/><small>Forward</small></button>
+        </div>
+        <div class="dpad-row">
+          <button class="btn-ctrl" onmousedown="sendCmd('L')" onmouseup="sendCmd('S')"
+            ontouchstart="sendCmd('L')" ontouchend="sendCmd('S')">◀<br/><small>Left</small></button>
+          <button class="btn-ctrl btn-stop" onclick="sendCmd('S')">■<br/><small>Stop</small></button>
+          <button class="btn-ctrl" onmousedown="sendCmd('R')" onmouseup="sendCmd('S')"
+            ontouchstart="sendCmd('R')" ontouchend="sendCmd('S')">▶<br/><small>Right</small></button>
+        </div>
+        <div class="dpad-row">
+          <button class="btn-ctrl" onmousedown="sendCmd('B')" onmouseup="sendCmd('S')"
+            ontouchstart="sendCmd('B')" ontouchend="sendCmd('S')">▼<br/><small>Back</small></button>
+        </div>
+      </div>
+      <button class="btn btn-emergency" onclick="emergencyStop()">🚨 EMERGENCY STOP</button>
+    </section>
+
+    <!-- Parking Sensor -->
+    <section class="card card-obstacle">
+      <h2>Parking Sensor</h2>
+      <div class="distance-display">
+        <div id="distance-arc" class="arc safe">
+          <span id="distance-value">-- cm</span>
+        </div>
+        <p id="obstacle-msg" class="obstacle-msg">Clear</p>
+      </div>
+    </section>
+
+    <!-- Face Management -->
+    <section class="card card-faces">
+      <h2>My Faces
+        <span class="face-counter" id="face-counter">{{ user_faces|length }} / {{ max_faces }}</span>
+      </h2>
+      <p class="hint">Max 2 faces per account (e.g. you + a household member).</p>
+
+      <!-- Registered faces list -->
+      <div id="faces-list" class="faces-list">
+        {% for fname in user_faces %}
+        <div class="face-item" id="fi-{{ fname }}">
+          <span class="face-icon">🧑</span>
+          <span class="face-name">{{ fname }}</span>
+          <button class="btn-delete-face" onclick="deleteFace('{{ fname }}')">✕</button>
+        </div>
+        {% else %}
+        <p class="no-faces" id="no-faces-msg">No faces registered yet.</p>
+        {% endfor %}
+      </div>
+
+      <!-- Add face actions -->
+      {% if user_faces|length < max_faces %}
+      <div class="face-actions" id="face-actions">
+        <button class="btn btn-capture" onclick="captureFace()">📷 Capture from Camera</button>
+        <label class="btn btn-upload">
+          📁 Upload Photo
+          <input type="file" id="face-upload-input" accept="image/*" onchange="uploadFace(this)" hidden/>
+        </label>
+      </div>
+      {% else %}
+      <div class="face-actions" id="face-actions">
+        <p class="hint" style="color:var(--yellow)">⚠️ Limit reached. Delete a face to add another.</p>
+      </div>
+      {% endif %}
+
+      <div id="face-msg" class="auth-msg" style="margin-top:10px"></div>
+    </section>
+
+    <!-- Logs -->
+    <section class="card card-logs">
+      <h2>System Logs <button class="btn-small" onclick="loadLogs()">↻</button></h2>
+      <div id="log-box" class="log-box"></div>
+    </section>
+
+  </main>
+
+  <script>
+    // Pass server-side data to JS
+    const CURRENT_USER  = "{{ username }}";
+    const INITIAL_FACES = {{ user_faces | tojson }};
+    const MAX_FACES     = {{ max_faces }};
+  </script>
+  <script src="/static/script.js"></script>
+</body>
+</html>

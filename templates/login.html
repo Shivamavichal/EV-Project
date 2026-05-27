@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login – AI Smart EV</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+    <div class="auth-logo">⚡ AI Smart EV</div>
+    <h1 class="auth-title">Sign In</h1>
+    <p class="auth-sub">Enter your credentials, then scan your face to unlock the vehicle.</p>
+
+    <form id="login-form" autocomplete="off">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="your username" required autocomplete="off"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" required/>
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+    </form>
+
+    <div id="login-msg" class="auth-msg"></div>
+
+    <!-- Face scan step (shown after password OK) -->
+    <div id="face-scan-section" class="face-scan-box hidden">
+      <p class="scan-hint">✅ Password verified. Now look at the camera to unlock your vehicle.</p>
+      <div class="camera-wrap-small">
+        <img id="face-scan-feed" src="" alt="Face Scan"/>
+      </div>
+      <div id="scan-status" class="scan-status">Scanning…</div>
+      <button class="btn btn-secondary" id="skip-scan-btn">Skip (no faces registered)</button>
+    </div>
+
+    <div class="auth-footer">
+      Don't have an account? <a href="/register">Register</a>
+    </div>
+  </div>
+
+  <script>
+    const form        = document.getElementById("login-form");
+    const msgEl       = document.getElementById("login-msg");
+    const faceSection = document.getElementById("face-scan-section");
+    const scanStatus  = document.getElementById("scan-status");
+    const skipBtn     = document.getElementById("skip-scan-btn");
+    let   pollTimer   = null;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const btn      = document.getElementById("login-btn");
+
+      btn.disabled    = true;
+      btn.textContent = "Signing in…";
+      msgEl.textContent = "";
+
+      try {
+        const res  = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          showMsg(data.message, "error");
+          btn.disabled    = false;
+          btn.textContent = "Sign In";
+          return;
+        }
+
+        // Password OK
+        form.classList.add("hidden");
+        faceSection.classList.remove("hidden");
+        document.getElementById("face-scan-feed").src = "/video_feed";
+
+        if (!data.has_faces) {
+          scanStatus.textContent = "⚠️ No faces registered. Go to dashboard to add faces.";
+          skipBtn.classList.remove("hidden");
+        } else {
+          skipBtn.classList.add("hidden");
+          startFacePoll();
+        }
+
+      } catch (err) {
+        showMsg("Network error. Try again.", "error");
+        btn.disabled    = false;
+        btn.textContent = "Sign In";
+      }
+    });
+
+    function startFacePoll() {
+      pollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch("/api/status");
+          if (res.status === 401) { clearInterval(pollTimer); return; }
+          const data = await res.json();
+
+          if (data.authorized) {
+            clearInterval(pollTimer);
+            scanStatus.textContent = `✅ Face recognized! Welcome, ${data.matched_user || data.username}.`;
+            scanStatus.style.color = "var(--green)";
+            setTimeout(() => window.location.href = "/dashboard", 1200);
+          } else if (data.face_detected) {
+            scanStatus.textContent = "🔍 Face detected — verifying…";
+          } else {
+            scanStatus.textContent = "👁 Look at the camera…";
+          }
+        } catch (_) {}
+      }, 800);
+    }
+
+    skipBtn.addEventListener("click", () => {
+      window.location.href = "/dashboard";
+    });
+
+    function showMsg(text, type) {
+      msgEl.textContent  = text;
+      msgEl.className    = "auth-msg " + type;
+    }
+  </script>
+</body>
+</html>
